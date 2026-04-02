@@ -1,0 +1,42 @@
+[
+  {
+    "question": "Tell me about yourself.",
+    "answer": "I am a software engineer with over five years of experience specializing in full-stack development and distributed systems. Throughout my career, I have successfully delivered scalable web applications that handle high traffic loads, and I pride myself on maintaining clean, well-tested code."
+  },
+  {
+    "question": "Explain a challenging project you worked on.",
+    "answer": "One of the most challenging projects I led was the migration of our legacy monolithic architecture into microservices. The project required deep logistical planning and seamless execution to ensure zero downtime. We utilized a strangler fig pattern which allowed us to incrementally transition services without disrupting user workflows."
+  },
+  {
+    "question": "What are your strengths and weaknesses?",
+    "answer": "My primary strength is my analytical problem-solving skills, which enable me to quickly debug complex issues and design robust architecture. As for a weakness, I sometimes struggle with delegating technical tasks because I enjoy hands-on implementation, but I have actively been improving by stepping into stronger mentorship roles."
+  },
+  {
+    "question": "Why do you want to work here?",
+    "answer": "I strongly admire your company's dedication to open-source software and continuous innovation. Your engineering team's recent publications on distributed databases align perfectly with my technical interests and long-term career aspirations."
+  },
+  {
+    "question": "Where do you see yourself in five years?",
+    "answer": "In five years, I aim to hold a senior architectural leadership role where I can drive high-level technical decisions across multiple teams. I also intend to remain highly technical, keeping up with emerging technologies and mentoring junior developers to cultivate a strong engineering culture."
+  },
+  {
+    "question": "Describe a time when you disagreed with a team member.",
+    "answer": "During a sprint planning session, a colleague and I disagreed on the choice of database for a new feature. Rather than arguing, I proposed we conduct a quick, time-boxed technical spike evaluating both choices against our specific read/write requirements. Data from the spike ultimately guided us to a mutual agreement."
+  },
+  {
+    "question": "How do you handle tight deadlines?",
+    "answer": "When facing a tight deadline, I focus strictly on prioritization and open communication. I break the project down into critical path items, ensure stakeholders are aware of realistic deliverables, and aggressively eliminate secondary features to ensure the core product ships on time and with high quality."
+  },
+  {
+    "question": "What is your approach to testing?",
+    "answer": "I advocate for a test-driven approach where automated tests are treated as first-class citizens. I ensure comprehensive unit coverage for business logic and implement robust integration tests for critical user flows to guarantee regression-free deployments in our CI/CD pipelines."
+  },
+  {
+    "question": "Can you explain RESTful API design?",
+    "answer": "RESTful API design revolves around using standard HTTP methods safely and predictably to manipulate stateless resources. A well-designed REST API utilizes clear hierarchical URL structures, leverages proper HTTP status codes for robust error handling, and provides consistent JSON payload schemas."
+  },
+  {
+    "question": "How do you keep your technical skills current?",
+    "answer": "I constantly learn by building side projects, participating in local hackathons, and reading engineering blogs from top tech companies. I also make it a habit to regularly review release notes for the languages and frameworks I use daily to understand new paradigms and performance improvements."
+  }
+]

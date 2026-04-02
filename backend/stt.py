@@ -35,12 +35,12 @@ def _get_model():
     return _model_instance
 
 
-def transcribe_bytes(audio_bytes: bytes, language: str | None = None) -> dict:
+def transcribe_file(file_path: str, language: str | None = None) -> dict:
     """
-    Transcribe raw audio bytes (webm, wav, mp3, etc.) using faster-whisper.
+    Transcribe raw audio file (webm, wav, mp3, etc.) using faster-whisper.
 
     Args:
-        audio_bytes: Raw audio file content.
+        file_path: Path to the written audio file.
         language: Optional ISO 639-1 language code (e.g., 'en'). Auto-detected if None.
 
     Returns:
@@ -50,20 +50,14 @@ def transcribe_bytes(audio_bytes: bytes, language: str | None = None) -> dict:
             "duration": float,
         }
     """
-    if not audio_bytes:
+    if not os.path.exists(file_path):
         return {"transcript": "", "language": "en", "duration": 0.0}
 
     model = _get_model()
 
-    # Write to a temp file (faster-whisper needs a file path)
-    suffix = _detect_suffix(audio_bytes)
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(audio_bytes)
-        tmp_path = tmp.name
-
     try:
         segments, info = model.transcribe(
-            tmp_path,
+            file_path,
             language=language,
             beam_size=5,
             vad_filter=True,              # skip silence
@@ -84,11 +78,9 @@ def transcribe_bytes(audio_bytes: bytes, language: str | None = None) -> dict:
             "language": info.language,
             "duration": round(duration, 2),
         }
-    finally:
-        try:
-            Path(tmp_path).unlink(missing_ok=True)
-        except Exception:
-            pass
+    except Exception as e:
+        logger.warning("Failed to transcribe partial file: %s", e)
+        return {"transcript": "", "language": "en", "duration": 0.0}
 
 
 def _detect_suffix(audio_bytes: bytes) -> str:
