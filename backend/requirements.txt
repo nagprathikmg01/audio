@@ -1,10 +1,10 @@
+faster-whisper
+sentence-transformers
+faiss-cpu
 fastapi
 uvicorn
 websockets
-faster-whisper
 numpy
 pydub
-sentence-transformers
-faiss-cpu
 groq
 httpx

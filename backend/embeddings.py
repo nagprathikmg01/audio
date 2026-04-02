@@ -48,6 +48,9 @@ def get_similarities(text: str, top_k: int = 2):
     """
     Computes cosine similarity for the normalized cleaned transcript text against the FAISS index.
     """
+    if _index is None:
+        init_faiss()
+        
     if not text or not text.strip() or _index is None or _index.ntotal == 0:
         return []
 
