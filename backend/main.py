@@ -225,73 +225,110 @@ async def websocket_endpoint(websocket: WebSocket):
     audio_buffer = bytearray()
     chunk_index = 0
     last_transcript = ""
+    live_verdict = "GENUINE"
 
     try:
         while True:
             message = await websocket.receive()
 
-            # Binary audio chunk
+            # ── Binary audio chunk: accumulate the FULL buffer ──────────────
             if "bytes" in message and message["bytes"]:
                 chunk_bytes = message["bytes"]
                 audio_buffer.extend(chunk_bytes)
                 chunk_index += 1
+                logger.debug("Audio buffer size: %d bytes (chunk %d)", len(audio_buffer), chunk_index)
+                # Binary chunks are silently accumulated.
+                # Live transcription is handled by Web Speech API on the frontend
+                # and arrives as live_text JSON messages below.
 
-                # Quietly hoard binary bytes for final analysis! We NO LONGER TRANSCRIBE chunks!
-                # All rapid UI transcription now flows through "text" JSON protocol dynamically below.
-
-            # Text control message or live dictionary transcript
+            # ── Text frame: live transcript OR control signal ───────────────
             elif "text" in message:
                 import json
                 raw_text = message["text"]
-                
-                # Check wrapper class if this is a JSON object map
+
+                # Parse JSON if possible
                 try:
                     payload = json.loads(raw_text)
                 except Exception:
                     payload = {"type": "command", "text": raw_text}
 
-                # Handle Browser-Native Live Text Streaming
+                # ── Live text from Web Speech API ──────────────────────────
                 if payload.get("type") == "live_text":
                     transcript = payload.get("text", "").strip()
-                    if transcript and transcript != last_transcript:
-                        last_transcript = transcript
+                    if not transcript:
+                        continue
 
-                        loop = asyncio.get_event_loop()
-                        await loop.run_in_executor(None, ensure_models_loaded)
+                    last_transcript = transcript
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, ensure_models_loaded)
+
+                    try:
                         from embeddings import compute_similarity
+                        sim_result = await loop.run_in_executor(
+                            None, compute_similarity, transcript
+                        )
+                        similarity = sim_result["semantic_similarity"]
 
-                        try:
-                            sim_result = await loop.run_in_executor(
-                                None, compute_similarity, transcript
-                            )
-                            similarity = sim_result["semantic_similarity"]
+                        if similarity >= 0.70:
+                            live_verdict = "SCRIPTED"
+                        elif similarity >= 0.40:
+                            live_verdict = "SUSPICIOUS"
+                        else:
+                            live_verdict = "GENUINE"
 
-                            if similarity >= 0.70:
-                                live_verdict = "SCRIPTED"
-                            elif similarity >= 0.40:
-                                live_verdict = "SUSPICIOUS"
-                            else:
-                                live_verdict = "GENUINE"
+                        await websocket.send_json({
+                            "type": "transcript",
+                            "transcript": transcript,
+                            "semantic_similarity": round(similarity, 4),
+                            "verdict": live_verdict,
+                            "chunk_index": chunk_index,
+                        })
+                    except Exception as e:
+                        logger.warning("Live scoring error: %s", e)
 
-                            await websocket.send_json({
-                                "type": "transcript",
-                                "transcript": transcript,
-                                "semantic_similarity": similarity,
-                                "verdict": live_verdict,
-                                "chunk_index": chunk_index,
-                            })
-                        except Exception as e:
-                            logger.warning("Live scoring error: %s", e)
-
-                # Handle Final Analysis Check
-                elif payload.get("text") == "DONE" or raw_text == "DONE":
-                    logger.info("Client sent DONE signal — running full analysis.")
-                    if audio_buffer:
-                        try:
+                # ── DONE signal: run final full analysis ───────────────────
+                elif payload.get("text") == "DONE" or raw_text.strip() == "DONE":
+                    logger.info("Client sent DONE — running final analysis.")
+                    try:
+                        if audio_buffer:
+                            # Full pipeline: STT on complete audio + LLM + behavior
                             result = await _full_analysis(bytes(audio_buffer))
+                        elif last_transcript:
+                            # No audio buffer (Web Speech only mode) — score the final transcript
+                            from embeddings import compute_similarity
+                            from behavior import analyze_behavior
+                            from llm import evaluate_response
+                            loop = asyncio.get_event_loop()
+                            sim_result = await loop.run_in_executor(None, compute_similarity, last_transcript)
+                            llm_result = await evaluate_response(last_transcript, sim_result["matched_question"])
+                            behavior_result = await loop.run_in_executor(None, analyze_behavior, last_transcript, 30.0)
+                            semantic_sim = sim_result["semantic_similarity"]
+                            memorization = llm_result["memorization_score"]
+                            behavior = behavior_result["behavior_score"]
+                            final_score = round(0.50 * semantic_sim + 0.30 * memorization + 0.20 * behavior, 4)
+                            result = {
+                                "transcript": last_transcript,
+                                "semantic_similarity": semantic_sim,
+                                "memorization_score": memorization,
+                                "memorization_explanation": llm_result["explanation"],
+                                "behavior_score": behavior,
+                                "final_score": final_score,
+                                "verdict": _compute_verdict(final_score),
+                                "matched_question": sim_result["matched_question"],
+                                "matched_phrases": sim_result["matched_phrases"],
+                                "speech_metrics": behavior_result,
+                                "all_scores": sim_result["all_scores"],
+                            }
+                        else:
+                            result = None
+
+                        if result:
                             await websocket.send_json({"type": "final", **result})
-                        except Exception as e:
-                            await websocket.send_json({"type": "error", "message": str(e)})
+                        else:
+                            await websocket.send_json({"type": "error", "message": "No audio or transcript received."})
+                    except Exception as e:
+                        logger.exception("Final analysis failed")
+                        await websocket.send_json({"type": "error", "message": str(e)})
                     break
 
     except WebSocketDisconnect:

@@ -1,13 +1,12 @@
 """
 stt.py — Speech-to-Text module using faster-whisper.
-Provides a singleton model with thread-safe transcription.
+Uses the tiny model for maximum speed on CPU.
 """
 
 import os
 import logging
 import tempfile
 import threading
-from functools import lru_cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -23,9 +22,9 @@ def _get_model():
         with _model_lock:
             if _model_instance is None:
                 from faster_whisper import WhisperModel
-                model_size = os.getenv("WHISPER_MODEL_SIZE", "base")
+                # Use "tiny" for max speed on free-tier CPU
+                model_size = os.getenv("WHISPER_MODEL_SIZE", "tiny")
                 logger.info("Loading faster-whisper model: %s", model_size)
-                # Use int8 quantization for CPU speed
                 _model_instance = WhisperModel(
                     model_size,
                     device="cpu",
@@ -38,9 +37,10 @@ def _get_model():
 def transcribe_bytes(audio_bytes: bytes, language: str | None = None) -> dict:
     """
     Transcribe raw audio bytes (webm, wav, mp3, etc.) using faster-whisper.
+    Writes the FULL buffer to a temp file — Whisper needs a complete valid file.
 
     Args:
-        audio_bytes: Raw audio file content.
+        audio_bytes: Raw audio file content (should be the complete accumulated buffer).
         language: Optional ISO 639-1 language code (e.g., 'en'). Auto-detected if None.
 
     Returns:
@@ -50,12 +50,13 @@ def transcribe_bytes(audio_bytes: bytes, language: str | None = None) -> dict:
             "duration": float,
         }
     """
-    if not audio_bytes:
+    if not audio_bytes or len(audio_bytes) < 1000:
+        # Too small to be a valid audio file
         return {"transcript": "", "language": "en", "duration": 0.0}
 
     model = _get_model()
 
-    # Write to a temp file (faster-whisper needs a file path)
+    # Write to a temp file — faster-whisper needs a file path, not raw bytes
     suffix = _detect_suffix(audio_bytes)
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(audio_bytes)
@@ -65,17 +66,14 @@ def transcribe_bytes(audio_bytes: bytes, language: str | None = None) -> dict:
         segments, info = model.transcribe(
             tmp_path,
             language=language,
-            beam_size=5,
-            vad_filter=True,              # skip silence
+            beam_size=1,           # Fastest setting for CPU
+            vad_filter=True,       # Skip silence
             vad_parameters=dict(
                 min_silence_duration_ms=300,
             ),
         )
 
-        words = []
-        for segment in segments:
-            words.append(segment.text.strip())
-
+        words = [segment.text.strip() for segment in segments]
         transcript = " ".join(words).strip()
         duration = info.duration if info.duration else 0.0
 
@@ -84,6 +82,9 @@ def transcribe_bytes(audio_bytes: bytes, language: str | None = None) -> dict:
             "language": info.language,
             "duration": round(duration, 2),
         }
+    except Exception as e:
+        logger.error("Transcription failed: %s", e)
+        return {"transcript": "", "language": "en", "duration": 0.0}
     finally:
         try:
             Path(tmp_path).unlink(missing_ok=True)
@@ -99,5 +100,7 @@ def _detect_suffix(audio_bytes: bytes) -> str:
         return ".mp3"
     if audio_bytes[:4] == b"fLaC":
         return ".flac"
+    if audio_bytes[:4] == b"OggS":
+        return ".ogg"
     # Default to webm (MediaRecorder output)
     return ".webm"
