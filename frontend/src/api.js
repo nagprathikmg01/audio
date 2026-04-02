@@ -1,7 +1,11 @@
 import axios from "axios";
 
+// Using the exact Render backend URL you provided
+const PROD_API_URL = "https://audio-1-3e7o.onrender.com";
+const PROD_WS_URL = "wss://audio-1-3e7o.onrender.com/ws";
+
 const api = axios.create({
-    baseURL: import.meta.env.DEV ? "" : "http://localhost:8000",
+    baseURL: import.meta.env.DEV ? "http://localhost:8000" : PROD_API_URL,
     timeout: 120000,
 });
 
@@ -38,13 +42,6 @@ export function createWebSocket() {
     if (import.meta.env.DEV) {
         return new WebSocket("ws://localhost:8000/ws");
     }
-    let wsBase = import.meta.env.VITE_WS_URL;
-    if (!wsBase) {
-        // Fallback: If no explicit WS URL, derive from window location
-        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        wsBase = `${wsProtocol}//${window.location.host}`;
-    }
-    // Remove trailing slash if present
-    wsBase = wsBase.replace(/\/$/, "");
-    return new WebSocket(`${wsBase}/ws`);
+    // Hardcoded to exact deployed Render backend
+    return new WebSocket(PROD_WS_URL);
 }
