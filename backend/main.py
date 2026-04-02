@@ -236,59 +236,55 @@ async def websocket_endpoint(websocket: WebSocket):
                 audio_buffer.extend(chunk_bytes)
                 chunk_index += 1
 
-                # Transcribe accumulated audio every chunk
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, ensure_models_loaded)
-                
-                from stt import transcribe_bytes
-                from embeddings import compute_similarity
+                # Quietly hoard binary bytes for final analysis! We NO LONGER TRANSCRIBE chunks!
+                # All rapid UI transcription now flows through "text" JSON protocol dynamically below.
 
+            # Text control message or live dictionary transcript
+            elif "text" in message:
+                import json
+                raw_text = message["text"]
+                
+                # Check wrapper class if this is a JSON object map
                 try:
-                    stt_result = await loop.run_in_executor(
-                        None, transcribe_bytes, bytes(audio_buffer)
-                    )
-                    transcript = stt_result["transcript"]
+                    payload = json.loads(raw_text)
+                except Exception:
+                    payload = {"type": "command", "text": raw_text}
+
+                # Handle Browser-Native Live Text Streaming
+                if payload.get("type") == "live_text":
+                    transcript = payload.get("text", "").strip()
                     if transcript and transcript != last_transcript:
                         last_transcript = transcript
 
-                        # Quick similarity score
-                        sim_result = await loop.run_in_executor(
-                            None, compute_similarity, transcript
-                        )
-                        similarity = sim_result["semantic_similarity"]
+                        loop = asyncio.get_event_loop()
+                        await loop.run_in_executor(None, ensure_models_loaded)
+                        from embeddings import compute_similarity
 
-                        if similarity >= 0.70:
-                            live_verdict = "SCRIPTED"
-                        elif similarity >= 0.40:
-                            live_verdict = "SUSPICIOUS"
-                        else:
-                            live_verdict = "GENUINE"
+                        try:
+                            sim_result = await loop.run_in_executor(
+                                None, compute_similarity, transcript
+                            )
+                            similarity = sim_result["semantic_similarity"]
 
-                        await websocket.send_json({
-                            "type": "transcript",
-                            "transcript": transcript,
-                            "semantic_similarity": similarity,
-                            "verdict": live_verdict,
-                            "chunk_index": chunk_index,
-                        })
-                    else:
-                        # Still send heartbeat
-                        await websocket.send_json({
-                            "type": "heartbeat",
-                            "chunk_index": chunk_index,
-                        })
-                except Exception as e:
-                    logger.warning("Chunk transcription error: %s", e)
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": str(e),
-                        "chunk_index": chunk_index,
-                    })
+                            if similarity >= 0.70:
+                                live_verdict = "SCRIPTED"
+                            elif similarity >= 0.40:
+                                live_verdict = "SUSPICIOUS"
+                            else:
+                                live_verdict = "GENUINE"
 
-            # Text control message
-            elif "text" in message:
-                text = message["text"]
-                if text == "DONE":
+                            await websocket.send_json({
+                                "type": "transcript",
+                                "transcript": transcript,
+                                "semantic_similarity": similarity,
+                                "verdict": live_verdict,
+                                "chunk_index": chunk_index,
+                            })
+                        except Exception as e:
+                            logger.warning("Live scoring error: %s", e)
+
+                # Handle Final Analysis Check
+                elif payload.get("text") == "DONE" or raw_text == "DONE":
                     logger.info("Client sent DONE signal — running full analysis.")
                     if audio_buffer:
                         try:

@@ -5,6 +5,7 @@ import SimilarityGauge from "./components/SimilarityGauge";
 import RiskIndicator from "./components/RiskIndicator";
 import BehaviorStatsPanel from "./components/BehaviorStatsPanel";
 import MatchedPhrasesHighlighter from "./components/MatchedPhrasesHighlighter";
+import { healthCheck } from "./api";
 
 function Header() {
   return (
@@ -32,8 +33,7 @@ function BackendStatus() {
 
   useEffect(() => {
     let active = true;
-    fetch("/health")
-      .then((r) => r.json())
+    healthCheck()
       .then(() => {
         if (active) setStatus("online");
       })
@@ -65,9 +65,9 @@ function EmptyState() {
   return (
     <div className="glass-card p-10 text-center animate-fade-in">
       <div className="text-6xl mb-4 opacity-40">📊</div>
-      <h3 className="text-gray-300 font-semibold text-lg mb-2">Analysis Results</h3>
+      <h3 className="text-gray-300 font-semibold text-lg mb-2">Awaiting Interview Analytics</h3>
       <p className="text-gray-500 text-sm max-w-xs mx-auto">
-        Upload an audio file or record directly — results will appear here after analysis.
+        Results strictly calculate and populate during active recording. Press Start to begin.
       </p>
 
       <div className="mt-6 grid grid-cols-3 gap-3 text-left">
@@ -102,7 +102,8 @@ export default function App() {
     setLiveUpdate(update);
   }, []);
 
-  const handleReset = () => {
+  const handleStart = () => {
+    // Dynamically clear the canvas specifically whenever recording kicks off
     setResult(null);
     setLiveUpdate(null);
     setIsAnalyzing(false);
@@ -130,16 +131,18 @@ export default function App() {
           </p>
         </div>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-          {/* ── Left Column (Input + Transcript) ── */}
-          <div className="xl:col-span-3 space-y-5">
-            <AudioRecorder
-              onLiveUpdate={handleLiveUpdate}
-              onResult={handleResult}
-              onAnalyzing={setIsAnalyzing}
-            />
+        {/* Top Explicit Control Deck (Horizontal Flow Base) */}
+        <AudioRecorder
+            onLiveUpdate={handleLiveUpdate}
+            onResult={handleResult}
+            onAnalyzing={setIsAnalyzing}
+            onStart={handleStart}
+        />
 
+        {/* Main Grid Floor */}
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+          {/* ── Left Column (Live Transcript Viewer Explicitly) ── */}
+          <div className="xl:col-span-3 space-y-5">
             <LiveTranscriptViewer
               transcript={result?.transcript}
               liveUpdate={liveUpdate}
@@ -232,12 +235,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Reset */}
-            {result && (
-              <button onClick={handleReset} className="btn-ghost w-full justify-center">
-                🔄 Analyze Another
-              </button>
-            )}
+            {/* Reset has been completely removed in favor of organic resets tracking handleStart internally. */}
           </div>
         </div>
       </main>

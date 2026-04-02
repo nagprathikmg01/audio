@@ -1,11 +1,11 @@
 import axios from "axios";
 
-// Using the exact Render backend URL you provided
+// Using the exact Render backend URL you provided unconditionally
 const PROD_API_URL = "https://audio-1-3e7o.onrender.com";
 const PROD_WS_URL = "wss://audio-1-3e7o.onrender.com/ws";
 
 const api = axios.create({
-    baseURL: import.meta.env.DEV ? "http://localhost:8000" : PROD_API_URL,
+    baseURL: PROD_API_URL, // Always use Render backend, even locally
     timeout: 120000,
 });
 
@@ -39,9 +39,6 @@ export async function healthCheck() {
  * @returns {WebSocket}
  */
 export function createWebSocket() {
-    if (import.meta.env.DEV) {
-        return new WebSocket("ws://localhost:8000/ws");
-    }
-    // Hardcoded to exact deployed Render backend
+    // Always use Render WebSocket, even locally
     return new WebSocket(PROD_WS_URL);
 }
